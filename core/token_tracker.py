@@ -6,6 +6,11 @@ class TokenTracker:
         self.usage = {}  # task_id -> {estimated, actual, per_step}
 
     def init_task(self, task_id, estimated_total):
+        try:
+            estimated_total = int(estimated_total)
+        except (ValueError, TypeError):
+            estimated_total = 0
+            
         self.usage[task_id] = {
             "estimated": estimated_total,
             "actual": 0,

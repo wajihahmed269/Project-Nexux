@@ -1,4 +1,5 @@
 import json
+import re
 from core.memory import create_task
 import uuid
 
@@ -25,8 +26,17 @@ def plan_task(planner_agent, user_input):
     task_id = str(uuid.uuid4())[:8]
     response = planner_agent.run(user_input, context=PLANNER_PROMPT)
     
-    # Strip markdown fences if model adds them
-    clean = response.strip().strip("```json").strip("```").strip()
+    # Safely extract JSON block
+    match = re.search(r'```(?:json)?(.*?)```', response, re.DOTALL)
+    if match:
+        clean = match.group(1).strip()
+    else:
+        clean = response.strip()
+        start = clean.find('{')
+        end = clean.rfind('}')
+        if start != -1 and end != -1:
+            clean = clean[start:end+1]
+            
     plan = json.loads(clean)
     
     task = create_task(task_id, user_input, plan)
