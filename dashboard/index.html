@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS — AI Orchestration</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --text: #e8e8f0;
+    --muted: #888899;
+    --accent: #7c6af7;
+    --accent-dim: #3d3470;
+    --success: #3ecf8e;
+    --warning: #f5a623;
+    --danger: #f04444;
+    --info: #4ea8de;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+
+  .logo { font-size: 18px; font-weight: 600; letter-spacing: 2px; color: var(--accent); }
+  .logo span { color: var(--muted); font-weight: 400; font-size: 13px; letter-spacing: 0; margin-left: 10px; }
+
+  .main { display: grid; grid-template-columns: 380px 1fr; gap: 0; height: calc(100vh - 56px); }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .content { overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  /* ── Task form ── */
+  textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 0.75rem;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 100px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-success { background: var(--success); color: #0f0f11; }
+  .btn-danger  { background: var(--danger);  color: #fff; }
+  .btn-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-full    { width: 100%; margin-top: 0.75rem; }
+
+  /* ── Status badges ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-idle    { background: var(--surface2); color: var(--muted); }
+  .badge-working { background: var(--accent-dim); color: var(--accent); }
+  .badge-failed  { background: #3a1a1a; color: var(--danger); }
+  .badge-done    { background: #0f2a1e; color: var(--success); }
+  .badge-pending { background: #2a2210; color: var(--warning); }
+  .badge-running { background: var(--accent-dim); color: var(--accent); }
+  .badge-cancelled { background: var(--surface2); color: var(--muted); }
+  .badge-skipped { background: var(--surface2); color: var(--muted); }
+
+  /* ── Agent cards ── */
+  .agent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  .agent-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.875rem;
+    transition: border-color 0.2s;
+  }
+  .agent-card.working { border-color: var(--accent); }
+  .agent-card.failed  { border-color: var(--danger); }
+
+  .agent-role { font-weight: 600; font-size: 13px; text-transform: capitalize; }
+  .agent-model { font-size: 11px; color: var(--muted); margin-top: 2px; margin-bottom: 8px; }
+
+  /* ── Steps ── */
+  .step-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+  .step-item:last-child { border-bottom: none; }
+
+  .step-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+    background: var(--muted);
+  }
+  .step-dot.done        { background: var(--success); }
+  .step-dot.in_progress { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .step-dot.failed      { background: var(--danger); }
+  .step-dot.skipped     { background: var(--muted); opacity: 0.4; }
+
+  .step-id   { font-size: 11px; color: var(--muted); font-family: monospace; min-width: 28px; }
+  .step-body { flex: 1; }
+  .step-instruction { font-size: 13px; color: var(--text); line-height: 1.4; }
+  .step-agent { font-size: 11px; color: var(--accent); margin-top: 2px; }
+  .step-tokens { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Token bar ── */
+  .token-bar-track {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    margin: 8px 0;
+    overflow: hidden;
+  }
+  .token-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+    transition: background 0.4s, width 0.4s;
+  }
+
+  /* ── Log entries ── */
+  .log-entry {
+    font-family: monospace;
+    font-size: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    color: var(--muted);
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time  { color: var(--muted); min-width: 55px; }
+  .log-event { min-width: 80px; }
+  .log-event.COMPLETED     { color: var(--success); }
+  .log-event.FAILED        { color: var(--danger); }
+  .log-event.RETRIED       { color: var(--warning); }
+  .log-event.BACKUP_USED   { color: var(--info); }
+  .log-event.USER_INTERVENED { color: var(--warning); }
+  .log-event.STARTED       { color: var(--accent); }
+
+  /* ── Plan preview ── */
+  .plan-phase { margin-bottom: 1rem; }
+  .plan-phase-title { font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 0.5rem; }
+  .plan-step {
+    display: flex;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .plan-step:last-child { border-bottom: none; }
+  .plan-step-id { color: var(--muted); min-width: 28px; font-family: monospace; }
+  .plan-step-agent { color: var(--accent); min-width: 60px; }
+  .plan-step-inst { color: var(--text); flex: 1; }
+  .plan-step-tokens { color: var(--muted); min-width: 50px; text-align: right; }
+
+  /* ── Task list ── */
+  .task-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .task-row:last-child { border-bottom: none; }
+  .task-row:hover { opacity: 0.8; }
+  .task-id { font-family: monospace; font-size: 11px; color: var(--muted); min-width: 65px; }
+  .task-input { flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Approval modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+    max-width: 95vw;
+  }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 1rem; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 1.25rem; }
+
+  /* ── Misc ── */
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 2rem 0; }
+  .pulse { animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .stat-row { display: flex; gap: 1rem; margin-bottom: 0.75rem; }
+  .stat { flex: 1; background: var(--surface2); border-radius: 8px; padding: 0.75rem; }
+  .stat-label { font-size: 11px; color: var(--muted); }
+  .stat-value { font-size: 20px; font-weight: 600; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">NEXUS <span>AI Orchestration System</span></div>
+  <div id="connection-status" style="font-size:12px;color:var(--success)">● Live</div>
+</header>
+
+<div class="main">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <!-- Task submission -->
+    <div class="card">
+      <div class="card-title">New Task</div>
+      <textarea id="task-input" placeholder="Describe what you want NEXUS to do...
+e.g. Write a Python class for a task queue with push, pop, and size methods"></textarea>
+      <button class="btn btn-primary btn-full" onclick="submitTask()" id="submit-btn">
+        Plan Task
+      </button>
+    </div>
+
+    <!-- Agent status -->
+    <div class="card">
+      <div class="card-title">Agents</div>
+      <div class="agent-grid" id="agent-grid">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Task history -->
+    <div class="card">
+      <div class="card-title">Recent Tasks</div>
+      <div id="task-list"><div class="empty">No tasks yet</div></div>
+    </div>
+
+  </aside>
+
+  <!-- ── Main content ── -->
+  <main class="content">
+
+    <!-- Active task header -->
+    <div id="active-header" style="display:none" class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="card-title" style="margin-bottom:4px">Active Task</div>
+          <div id="active-input" style="font-size:15px;font-weight:500"></div>
+          <div id="active-task-id" style="font-size:11px;color:var(--muted);margin-top:2px;font-family:monospace"></div>
+        </div>
+        <div id="active-badge"></div>
+      </div>
+    </div>
+
+    <!-- Token stats -->
+    <div id="token-section" style="display:none" class="card">
+      <div class="card-title">Token Usage</div>
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-label">Estimated</div>
+          <div class="stat-value" id="tokens-estimated">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Actual</div>
+          <div class="stat-value" id="tokens-actual">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Cost</div>
+          <div class="stat-value" style="color:var(--success)">$0.00</div>
+        </div>
+      </div>
+      <div class="token-bar-track">
+        <div class="token-bar-fill" id="token-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="card">
+      <div class="card-title">Execution Steps</div>
+      <div id="steps-container"><div class="empty">Submit a task to begin</div></div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <div class="card-title">Event Log</div>
+      <div id="log-container" style="max-height:220px;overflow-y:auto">
+        <div class="empty">No events yet</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Approval modal ── -->
+<div class="modal-overlay" id="approval-modal">
+  <div class="modal">
+    <div class="modal-title">Review Execution Plan</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">
+      Token estimate: <span id="modal-tokens" style="color:var(--warning);font-weight:600"></span>
+    </div>
+    <div id="modal-plan"></div>
+    <div class="modal-actions">
+      <button class="btn btn-success" style="flex:1" onclick="approveTask()">Approve & Execute</button>
+      <button class="btn btn-danger"  style="flex:1" onclick="cancelTask()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentTaskId = null;
+let pollInterval = null;
+
+// ── Submit task ────────────────────────────────────────────────────────
+async function submitTask() {
+  const input = document.getElementById("task-input").value.trim();
+  if (!input) return;
+
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  btn.textContent = "Planning...";
+
+  try {
+    const res = await fetch("/task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_input: input })
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || "Failed to plan task");
+
+    currentTaskId = data.task_id;
+    showApprovalModal(data);
+
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Plan Task";
+  }
+}
+
+// ── Approval modal ─────────────────────────────────────────────────────
+function showApprovalModal(data) {
+  document.getElementById("modal-tokens").textContent =
+    (data.total_token_estimate || 0).toLocaleString() + " tokens";
+
+  const planEl = document.getElementById("modal-plan");
+  planEl.innerHTML = "";
+
+  const phases = data.plan?.phases || [];
+  phases.forEach(phase => {
+    const phaseDiv = document.createElement("div");
+    phaseDiv.className = "plan-phase";
+    phaseDiv.innerHTML = `<div class="plan-phase-title">Phase ${phase.phase}: ${phase.name}</div>`;
+
+    phase.steps.forEach(step => {
+      const stepDiv = document.createElement("div");
+      stepDiv.className = "plan-step";
+      stepDiv.innerHTML = `
+        <span class="plan-step-id">${step.step_id}</span>
+        <span class="plan-step-agent">${step.agent}</span>
+        <span class="plan-step-inst">${step.instruction.substring(0, 70)}${step.instruction.length > 70 ? "..." : ""}</span>
+        <span class="plan-step-tokens">~${step.token_estimate || "?"}</span>
+      `;
+      phaseDiv.appendChild(stepDiv);
+    });
+
+    planEl.appendChild(phaseDiv);
+  });
+
+  document.getElementById("approval-modal").classList.add("visible");
+}
+
+async function approveTask() {
+  document.getElementById("approval-modal").classList.remove("visible");
+  if (!currentTaskId) return;
+
+  await fetch(`/task/${currentTaskId}/approve`, { method: "POST" });
+
+  startPolling(currentTaskId);
+  loadTaskList();
+  document.getElementById("task-input").value = "";
+}
+
+async function cancelTask() {
+  document.getElementById("approval-modal").classList.remove("visible");
+  if (currentTaskId) {
+    await fetch(`/task/${currentTaskId}/cancel`, { method: "POST" });
+  }
+  currentTaskId = null;
+}
+
+// ── Polling ────────────────────────────────────────────────────────────
+function startPolling(taskId) {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(() => refreshTask(taskId), 3000);
+  refreshTask(taskId);
+}
+
+async function refreshTask(taskId) {
+  try {
+    const [taskRes, logRes] = await Promise.all([
+      fetch(`/task/${taskId}`),
+      fetch(`/logs/${taskId}`)
+    ]);
+    const task = await taskRes.json();
+    const logs = await logRes.json();
+
+    renderActiveHeader(task);
+    renderSteps(task);
+    renderTokens(task);
+    renderLogs(logs);
+
+    if (["COMPLETED", "FAILED", "CANCELLED"].includes(task.status)) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      loadTaskList();
+    }
+  } catch (e) {
+    console.error("Poll error:", e);
+  }
+}
+
+// ── Render functions ───────────────────────────────────────────────────
+function renderActiveHeader(task) {
+  const header = document.getElementById("active-header");
+  header.style.display = "block";
+  document.getElementById("active-input").textContent = task.user_input || "";
+  document.getElementById("active-task-id").textContent = "ID: " + task.task_id;
+  document.getElementById("active-badge").innerHTML =
+    `<span class="badge badge-${(task.status || "").toLowerCase()}">${task.status}</span>`;
+}
+
+function renderSteps(task) {
+  const container = document.getElementById("steps-container");
+  const plan = task.plan?.phases || [];
+  const stepStates = task.steps || {};
+
+  if (!plan.length) {
+    container.innerHTML = `<div class="empty">No steps</div>`;
+    return;
+  }
+
+  let html = "";
+  plan.forEach(phase => {
+    html += `<div style="font-size:11px;font-weight:600;color:var(--accent);
+              margin:12px 0 6px;text-transform:uppercase;letter-spacing:1px">
+              Phase ${phase.phase}: ${phase.name}</div>`;
+    phase.steps.forEach(step => {
+      const state = stepStates[step.step_id];
+      const status = state?.status?.toLowerCase() || "pending";
+      const tokens = task.tokens?.per_step?.[step.step_id] || "";
+
+      html += `
+        <div class="step-item">
+          <div class="step-dot ${status}"></div>
+          <span class="step-id">${step.step_id}</span>
+          <div class="step-body">
+            <div class="step-instruction">${step.instruction}</div>
+            <div class="step-agent">${step.agent}</div>
+            ${tokens ? `<div class="step-tokens">${tokens} tokens used</div>` : ""}
+          </div>
+          <span class="badge badge-${status === "in_progress" ? "running" : status}">
+            ${status.replace("_", " ")}
+          </span>
+        </div>`;
+    });
+  });
+
+  container.innerHTML = html;
+}
+
+function renderTokens(task) {
+  const section = document.getElementById("token-section");
+  section.style.display = "block";
+
+  const est = task.tokens?.estimated || 0;
+  const act = task.tokens?.actual || 0;
+
+  document.getElementById("tokens-estimated").textContent = est.toLocaleString();
+  document.getElementById("tokens-actual").textContent = act.toLocaleString();
+
+  const pct = est > 0 ? Math.min(Math.round((act / est) * 100), 100) : 0;
+  const bar = document.getElementById("token-bar");
+  bar.style.width = pct + "%";
+
+  // Turn bar red if actual exceeds estimated (Day 26 hardening)
+  bar.style.background = act > est
+    ? "var(--danger)"
+    : pct > 80
+    ? "var(--warning)"
+    : "var(--accent)";
+}
+
+function renderLogs(logs) {
+  const container = document.getElementById("log-container");
+  if (!logs.length) {
+    container.innerHTML = `<div class="empty">No events yet</div>`;
+    return;
+  }
+
+  const recent = logs.slice(-30).reverse();
+  container.innerHTML = recent.map(e => `
+    <div class="log-entry">
+      <span class="log-time">${(e.timestamp || "").substring(11, 19)}</span>
+      <span class="log-event ${e.event}">${e.event}</span>
+      <span>${e.agent} · step ${e.step_id}${e.detail ? " · " + e.detail : ""}</span>
+    </div>
+  `).join("");
+
+  // Auto scroll to top (newest first)
+  container.scrollTop = 0;
+}
+
+// ── Agent grid ─────────────────────────────────────────────────────────
+async function refreshAgents() {
+  try {
+    const res = await fetch("/agents");
+    const agents = await res.json();
+    const grid = document.getElementById("agent-grid");
+
+    grid.innerHTML = Object.values(agents).map(a => `
+      <div class="agent-card ${a.status.toLowerCase()}">
+        <div class="agent-role">${a.role}</div>
+        <div class="agent-model">${a.model.substring(0, 22)}</div>
+        <span class="badge badge-${a.status.toLowerCase()}">${a.status}</span>
+        ${a.last_tokens ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">${a.last_tokens} tokens</div>` : ""}
+      </div>
+    `).join("");
+  } catch (e) {
+    console.error("Agent refresh error:", e);
+  }
+}
+
+// ── Task list ──────────────────────────────────────────────────────────
+async function loadTaskList() {
+  try {
+    const res = await fetch("/tasks");
+    const tasks = await res.json();
+    const el = document.getElementById("task-list");
+
+    if (!tasks.length) {
+      el.innerHTML = `<div class="empty">No tasks yet</div>`;
+      return;
+    }
+
+    el.innerHTML = tasks.slice(0, 8).map(t => `
+      <div class="task-row" onclick="loadTask('${t.task_id}')">
+        <span class="task-id">${t.task_id}</span>
+        <span class="task-input">${t.user_input}</span>
+        <span class="badge badge-${(t.status || "").toLowerCase()}">${t.status}</span>
+      </div>
+    `).join("");
+  } catch (e) {
+    console.error("Task list error:", e);
+  }
+}
+
+async function loadTask(taskId) {
+  currentTaskId = taskId;
+  startPolling(taskId);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+refreshAgents();
+loadTaskList();
+setInterval(refreshAgents, 3000);
+setInterval(loadTaskList, 10000);
+
+document.getElementById("task-input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.ctrlKey) submitTask();
+});
+</script>
+</body>
+</html>
