@@ -1,40 +1,57 @@
 from core.memory import get_task, update_step, save_checkpoint
 from core.logger import log_event
+from core.continuation import run_with_fallback
 
 def run_task(task_id, agents, tracker=None):
+    from core.scope_guard import ScopeGuard
+    scope_guard = ScopeGuard()
+    
     task = get_task(task_id)
     plan = task["plan"]
-    context_accumulator = ""   # carries all outputs from step to step
+    context_accumulator = ""
 
     for phase in plan["phases"]:
-        print(f"\n--- Phase {phase['phase']}: {phase['name']} ---")
-        for step in phase["steps"]:
+        print(f"\n{'='*50}")
+        print(f"Phase {phase['phase']}: {phase['name']}")
+        print(f"{'='*50}")
+
+        for step in plan_steps(phase):
             step_id = step["step_id"]
             agent_role = step["agent"]
             instruction = step["instruction"]
 
-            log_event(task_id, step_id, agent_role, "STARTED")
+            print(f"\n  Step {step_id} → [{agent_role.upper()}]")
+            print(f"  {instruction[:80]}...")
+
             update_step(task_id, step_id, "IN_PROGRESS")
+            log_event(task_id, step_id, agent_role, "STARTED")
 
             agent = agents.get(agent_role)
             if not agent:
+                log_event(task_id, step_id, agent_role, "FAILED",
+                          "No agent configured for this role")
                 update_step(task_id, step_id, "FAILED")
-                log_event(task_id, step_id, agent_role, "FAILED", "No agent found")
                 continue
 
-            try:
-                # Pass accumulated outputs as context
-                output = agent.run(instruction, context=context_accumulator)
-                update_step(task_id, step_id, "DONE", output)
-                save_checkpoint(task_id, step_id, agent_role, output)
-                
-                if tracker:
-                    tracker.record_step(task_id, step_id, agent.last_tokens)
-                
-                log_event(task_id, step_id, agent_role, "COMPLETED", f"{agent.last_tokens} tokens")
-                context_accumulator += f"\n[Output from {agent_role} step {step_id}]:\n{output}\n"   # append to context
-                
-            except RuntimeError as e:
-                update_step(task_id, step_id, "FAILED")
-                log_event(task_id, step_id, agent_role, "FAILED", str(e))
-                # Do not reset context_accumulator on failure so next steps might still proceed
+            output = run_with_fallback(
+                agent=agent,
+                prompt=instruction,
+                task_id=task_id,
+                step_id=step_id,
+                context=context_accumulator,
+                tracker=tracker
+            )
+
+            if output:
+                 context_accumulator += f"\n[Output from {agent_role} step {step_id}]:\n{output}\n"   # append to context
+                 
+            # ScopeGuard Token Check as requested in Day 19
+            if tracker:
+                scope_guard.check_tokens(tracker, task_id)
+
+    print(f"\n{'='*50}")
+    print(f"Task {task_id} complete.")
+    print(f"{'='*50}\n")
+
+def plan_steps(phase):
+    return phase.get("steps", [])

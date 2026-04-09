@@ -1,7 +1,13 @@
 import httpx
-from dotenv import load_dotenv
 
-load_dotenv()
+class AgentTimeoutError(Exception):
+    pass
+
+class AgentEmptyResponseError(Exception):
+    pass
+
+class AgentAPIError(Exception):
+    pass
 
 class Agent:
     def __init__(self, role, model, api_key, api_url, backup=None, system_prompt=""):
@@ -13,6 +19,7 @@ class Agent:
         self.system_prompt = system_prompt
         self.status = "IDLE"
         self.last_tokens = 0
+        self.last_error = None
 
     def run(self, prompt, context=""):
         self.status = "WORKING"
@@ -23,33 +30,57 @@ class Agent:
             parts.append(context)
         parts.append(prompt)
         full_prompt = "\n\n".join(parts)
-        
+
         try:
             content, tokens = self._call(full_prompt)
             self.status = "IDLE"
             self.last_tokens = tokens
+            self.last_error = None
             return content
+        except AgentTimeoutError as e:
+            self.status = "FAILED"
+            self.last_error = ("TIMEOUT", str(e))
+            raise RuntimeError(f"[TIMEOUT] Agent {self.role}: {e}")
+        except AgentEmptyResponseError as e:
+            self.status = "FAILED"
+            self.last_error = ("EMPTY_RESPONSE", str(e))
+            raise RuntimeError(f"[EMPTY] Agent {self.role}: {e}")
+        except AgentAPIError as e:
+            self.status = "FAILED"
+            self.last_error = ("API_ERROR", str(e))
+            raise RuntimeError(f"[API_ERROR] Agent {self.role}: {e}")
         except Exception as e:
             self.status = "FAILED"
-            raise RuntimeError(f"Agent {self.role} failed: {e}")
+            self.last_error = ("UNKNOWN", str(e))
+            raise RuntimeError(f"[UNKNOWN] Agent {self.role}: {e}")
 
     def _call(self, prompt):
-        response = httpx.post(
-            self.api_url,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": self.model,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
-        )
-        response.raise_for_status()
+        try:
+            response = httpx.post(
+                self.api_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}]
+                },
+                timeout=30
+            )
+        except httpx.TimeoutException:
+            raise AgentTimeoutError("Request timed out after 30s")
+        except httpx.RequestError as e:
+            raise AgentAPIError(f"Network error: {e}")
+
+        if response.status_code != 200:
+            raise AgentAPIError(f"HTTP {response.status_code}: {response.text[:200]}")
+
         data = response.json()
-        
         content = data["choices"][0]["message"]["content"]
+
+        if not content or not content.strip():
+            raise AgentEmptyResponseError("Model returned empty response")
+
         tokens = data.get("usage", {}).get("total_tokens", 0)
-        
         return content, tokens

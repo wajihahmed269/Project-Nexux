@@ -2,6 +2,7 @@ from core.agent_loader import load_agents
 from core.planner import plan_task
 from core.master import run_task
 from core.token_tracker import TokenTracker
+from core.scope_guard import ScopeGuard
 
 def show_plan(plan):
     print("\n" + "="*50)
@@ -39,6 +40,7 @@ def get_user_approval(plan):
 def main():
     agents = load_agents()
     tracker = TokenTracker(warning_threshold=10000)
+    scope_guard = ScopeGuard()
     
     user_input = input("Enter your task: ")
     
@@ -60,6 +62,7 @@ def main():
     
     # Initialize token tracking
     tracker.init_task(task_id, plan.get("total_token_estimate", 0))
+    scope_guard.check_steps(plan)
     
     print(f"\nExecuting task {task_id}...")
     run_task(task_id, agents, tracker)
