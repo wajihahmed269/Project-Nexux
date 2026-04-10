@@ -1,8 +1,8 @@
 agents:
   planner:
-    model: gemini-1.5-flash
-    api_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
-    api_key_env: GEMINI_API_KEY
+    model: llama3-70b-8192
+    api_url: https://api.groq.com/openai/v1/chat/completions
+    api_key_env: GROQ_API_KEY
     backup: mistral_planner
 
   coder:
@@ -18,9 +18,9 @@ agents:
     backup: mistral_coder
 
   reviewer:
-    model: gemini-1.5-flash
-    api_url: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
-    api_key_env: GEMINI_API_KEY
+    model: llama3-70b-8192
+    api_url: https://api.groq.com/openai/v1/chat/completions
+    api_key_env: GROQ_API_KEY
     backup: mistral_planner
 
   # ── Backup agents (Mistral free tier) ──────────────────────────────
