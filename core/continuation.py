@@ -32,14 +32,15 @@ def run_with_fallback(agent, prompt, task_id, step_id, context="", tracker=None)
                   f"{agent.last_tokens} tokens")
         return output
 
-    except RuntimeError as primary_error:
+    except RuntimeError as e:
+        primary_error = str(e)
         error_type = agent.last_error[0] if agent.last_error else "UNKNOWN"
         log_event(task_id, step_id, agent.role, "FAILED",
                   f"Primary failed [{error_type}]: {primary_error}")
 
     # ── 2. Smart retry ───────────────────────────────────────────────────
     print(f"\n  ↻ Smart retry for step {step_id}...")
-    retry_prompt = build_retry_prompt(prompt, str(primary_error), attempt_number=1)
+    retry_prompt = build_retry_prompt(prompt, primary_error, attempt_number=1)
 
     try:
         output = agent.run(retry_prompt, context=context)

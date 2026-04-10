@@ -1,0 +1,10 @@
+{
+  "task_id": "stress_001",
+  "user_input": "stress test",
+  "status": "PENDING",
+  "created_at": "2026-04-10T05:22:28.477685",
+  "plan": {
+    "phases": []
+  },
+  "steps": {}
+}

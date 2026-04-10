@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+import secrets
 import json
 import os
 import sys
@@ -16,7 +18,20 @@ from core.token_tracker import TokenTracker
 from core.scope_guard import ScopeGuard
 from core.memory import get_task
 
-app = FastAPI(title="NEXUS Dashboard")
+security = HTTPBasic()
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, os.getenv("DASHBOARD_USER", "admin"))
+    correct_password = secrets.compare_digest(credentials.password, os.getenv("DASHBOARD_PASS", "nexus123"))
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials
+
+app = FastAPI(title="NEXUS Dashboard", dependencies=[Depends(verify_credentials)])
 
 # ── Global state ──────────────────────────────────────────────────────
 agents = load_agents()

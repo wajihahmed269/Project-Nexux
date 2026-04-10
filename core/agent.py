@@ -77,10 +77,15 @@ class Agent:
             raise AgentAPIError(f"HTTP {response.status_code}: {response.text[:200]}")
 
         data = response.json()
-        content = data["choices"][0]["message"]["content"]
+        
+        if "gemini" in self.api_url:
+            content = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            tokens = data.get("usageMetadata", {}).get("totalTokenCount", 0)
+        else:
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            tokens = data.get("usage", {}).get("total_tokens", 0)
 
         if not content or not content.strip():
             raise AgentEmptyResponseError("Model returned empty response")
 
-        tokens = data.get("usage", {}).get("total_tokens", 0)
         return content, tokens
