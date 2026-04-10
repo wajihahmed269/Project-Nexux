@@ -17,6 +17,9 @@ class Agent:
         self.api_url = api_url
         self.backup = backup
         self.system_prompt = system_prompt
+        tool_instructions = "\n\nIf you need to perform a web search to gather up-to-date or missing information, output EXACTLY this string and nothing else: [TOOL: WEB_SEARCH] \"your search query here\". Wait for the system to reply with the results before continuing."
+        self.system_prompt += tool_instructions
+        
         self.status = "IDLE"
         self.last_tokens = 0
         self.last_error = None

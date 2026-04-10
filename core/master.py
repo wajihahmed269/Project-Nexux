@@ -1,6 +1,9 @@
 from core.memory import get_task, update_step, save_checkpoint
 from core.logger import log_event
 from core.continuation import run_with_fallback
+from core.sandbox import extract_code, execute_code
+from core.vector_memory import embed_task
+import json
 
 def run_task(task_id, agents, tracker=None):
     from core.scope_guard import ScopeGuard
@@ -33,6 +36,12 @@ def run_task(task_id, agents, tracker=None):
                 update_step(task_id, step_id, "FAILED")
                 continue
 
+            if agent_role == "reviewer" and "```python" in context_accumulator:
+                code = extract_code(context_accumulator.split("[Output from")[-1])
+                if code:
+                    sandbox_result = execute_code(code)
+                    instruction += f"\n\n[SANDBOX EXECUTION LOG]:\n{sandbox_result}\n\nPlease review both the code string and this execution output."
+
             output = run_with_fallback(
                 agent=agent,
                 prompt=instruction,
@@ -52,6 +61,8 @@ def run_task(task_id, agents, tracker=None):
     print(f"\n{'='*50}")
     print(f"Task {task_id} complete.")
     print(f"{'='*50}\n")
+    
+    embed_task(task_id, task["user_input"], json.dumps(plan))
 
 def plan_steps(phase):
     return phase.get("steps", [])

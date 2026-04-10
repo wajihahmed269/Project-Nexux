@@ -1,6 +1,19 @@
 from core.memory import update_step, save_checkpoint, load_checkpoint
 from core.logger import log_event
+from core.tools import web_search
+import re
 
+def _intercept_tools(output, agent, prompt, task_id, step_id, context):
+    """Detect tool calls, execute them, and recursively prompt the agent."""
+    if "[TOOL: WEB_SEARCH]" in output:
+        match = re.search(r'\[TOOL:\s*WEB_SEARCH\]\s*"([^"]+)"', output)
+        if match:
+            query = match.group(1)
+            print(f"\n  🔍 Agent initiated Web Search: '{query}'")
+            search_result = web_search(query)
+            tool_context = context + f"\n\n[System Tool Response for '{query}']:\n{search_result}"
+            return agent.run("You previously requested a web search. Here are the true results. Now proceed to fully answer my original instruction:\n" + prompt, context=tool_context)
+    return output
 
 def build_retry_prompt(original_prompt, error_message, attempt_number):
     return f"""Previous attempt {attempt_number} failed with this error:
@@ -24,6 +37,7 @@ def run_with_fallback(agent, prompt, task_id, step_id, context="", tracker=None)
     # ── 1. Primary attempt ──────────────────────────────────────────────
     try:
         output = agent.run(prompt, context=context)
+        output = _intercept_tools(output, agent, prompt, task_id, step_id, context)
         update_step(task_id, step_id, "DONE", output)
         save_checkpoint(task_id, step_id, agent.role, output)
         if tracker:
@@ -44,6 +58,7 @@ def run_with_fallback(agent, prompt, task_id, step_id, context="", tracker=None)
 
     try:
         output = agent.run(retry_prompt, context=context)
+        output = _intercept_tools(output, agent, retry_prompt, task_id, step_id, context)
         update_step(task_id, step_id, "DONE", output)
         save_checkpoint(task_id, step_id, agent.role, output)
         if tracker:
@@ -70,6 +85,7 @@ def run_with_fallback(agent, prompt, task_id, step_id, context="", tracker=None)
             backup_context = checkpoint["output"] if checkpoint else context
 
             output = agent.backup.run(prompt, context=backup_context)
+            output = _intercept_tools(output, agent.backup, prompt, task_id, step_id, backup_context)
             update_step(task_id, step_id, "DONE", output)
             save_checkpoint(task_id, step_id, agent.backup.role, output)
             if tracker:

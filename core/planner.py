@@ -2,10 +2,13 @@ import json
 import re
 from core.memory import create_task
 import uuid
+from core.vector_memory import search_tasks
 
 PLANNER_PROMPT = """
 You are a task planner for an AI orchestration system.
 Break the user's task into clear steps. Return ONLY valid JSON, no markdown, no explanation.
+
+{past_context_prompt}
 
 Format:
 {
@@ -24,7 +27,17 @@ Format:
 
 def plan_task(planner_agent, user_input):
     task_id = str(uuid.uuid4())[:8]
-    response = planner_agent.run(user_input, context=PLANNER_PROMPT)
+    
+    # Query ChromaDB for past tasks to guide planning
+    past_memory = search_tasks(user_input)
+    if past_memory:
+        past_context = f"Here is a successful plan from a similar past task. Use it as inspiration:\n{past_memory}"
+    else:
+        past_context = ""
+        
+    prompt = PLANNER_PROMPT.replace("{past_context_prompt}", past_context)
+    
+    response = planner_agent.run(user_input, context=prompt)
     
     # Safely extract JSON block
     match = re.search(r'```(?:json)?(.*?)```', response, re.DOTALL)
